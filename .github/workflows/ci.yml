@@ -1,0 +1,30 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+  schedule:
+    - cron: '47 17 * * *'   # 毎晩 02:47 JST: 最新の 2FastAPI / MFastAPI / 上流で再試験し、通れば自動で版を上げて公開
+  workflow_dispatch:
+permissions: { contents: write, issues: write }
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12", "3.13"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ matrix.python }}" }
+      # 2FastAPI は PyPI 未公開のため GitHub の最新(main)を使う。依存は常に最新で解決する
+      - run: python -m pip install -U pip && python -m pip install "tofastapi @ git+https://github.com/aon-co-jp/2FastAPI.git" -e ".[test]"
+      # MFastAPI は GitHub リリースのホイール(体系に合う最新)。取れない環境では素の FastAPI として試験する
+      - env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          v=$(python -c "import sys;print('cp%d%d' % sys.version_info[:2])")
+          gh release download -R aon-co-jp/MFastAPI --pattern "mfastapi-*-$v-$v-manylinux_2_28_x86_64.whl" --dir /tmp/mf || true
+          ls /tmp/mf/*.whl >/dev/null 2>&1 && python -m pip install /tmp/mf/*.whl || echo "no MFastAPI wheel for $v: testing plain FastAPI"
+      - run: python -m pytest -q
+  upstream-issue:
+    if: failure() && github.event_name == 'schedule'
