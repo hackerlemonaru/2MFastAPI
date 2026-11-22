@@ -29,3 +29,32 @@ jobs:
           mkdir -p "$RUNNER_TEMP/docs"
           shopt -s nullglob nocaseglob
           n=0
+          for f in *.md; do cp "$f" "$RUNNER_TEMP/docs/"; n=$((n+1)); done
+          echo "found $n markdown file(s)"
+          [ "$n" -gt 0 ] || echo "::warning::no top-level .md found"
+          for f in "$RUNNER_TEMP"/docs/*.md; do
+            [ -s "$f" ] || echo "::warning::$(basename "$f") is empty"
+            iconv -f UTF-8 -t UTF-8 "$f" >/dev/null 2>&1 || echo "::warning::$(basename "$f") is not valid UTF-8"
+          done
+          printf 'source: %s\ncommit: %s\nupdated: %s\n' "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$(date -u +%FT%TZ)" > "$RUNNER_TEMP/docs/.docs-source.txt"
+      - name: List latest installers for every OS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 最新リリース(下書き・先行版を除く)の添付を、OSごとに INSTALLERS.md へ並べる。ソースの版とは別。
+          # Lists the newest stable release's assets per OS in INSTALLERS.md, apart from source versions.
+          out="$RUNNER_TEMP/docs/INSTALLERS.md"
+          rel=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" 2>/dev/null || true)
+          {
+            echo "# Latest installers / 最新のインストーラー"
+            echo
+            if [ -z "$rel" ] || [ "$(echo "$rel" | jq -r '.tag_name // empty')" = "" ]; then
+              echo "No release yet. / まだリリースはありません。"
+            else
+              echo "Version / 版: \`$(echo "$rel" | jq -r .tag_name)\` ($(echo "$rel" | jq -r '.published_at[:10]')) - $(echo "$rel" | jq -r .html_url)"
+              echo
+              for os in "Windows|exe msi" "macOS|dmg pkg" "Linux|deb rpm AppImage appimage tar.gz tgz" "Android|apk aab" "iOS|ipa" "Other / その他|zip"; do
+                name="${os%%|*}"; exts="${os#*|}"
+                rows=""
+                for e in $exts; do
+                  rows="$rows$(echo "$rel" | jq -r --arg e ".$e" '.assets[] | select(.name|ascii_downcase|endswith($e)) | "| [\(.name)](\(.browser_download_url)) | \(.size/1048576*10|floor/10) MB | \((.digest // "-")|sub("^sha256:";"")) |"')"$'\n'
