@@ -58,3 +58,35 @@ jobs:
                 rows=""
                 for e in $exts; do
                   rows="$rows$(echo "$rel" | jq -r --arg e ".$e" '.assets[] | select(.name|ascii_downcase|endswith($e)) | "| [\(.name)](\(.browser_download_url)) | \(.size/1048576*10|floor/10) MB | \((.digest // "-")|sub("^sha256:";"")) |"')"$'\n'
+                done
+                rows=$(printf '%s' "$rows" | sed '/^$/d' | sort -u)
+                if [ -n "$rows" ]; then
+                  echo "## $name"; echo
+                  echo "| File | Size | SHA-256 |"; echo "|---|---|---|"
+                  echo "$rows"; echo
+                fi
+              done
+              echo "_Unsigned builds may show an OS warning. / 署名のないものは、OSが警告を出すことがあります。_"
+            fi
+          } > "$out"
+          cat "$out" >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish to docs branch
+        run: |
+          git config user.name "docs-latest[bot]"
+          git config user.email "docs-latest@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin docs >/dev/null 2>&1; then
+            git fetch --depth 1 origin docs
+            git checkout -B docs FETCH_HEAD
+          else
+            git checkout --orphan docs
+          fi
+          git rm -rfq . 2>/dev/null || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a "$RUNNER_TEMP"/docs/. .
+          git add -A
+          # 日時だけの差では新しいコミットを作らない / skip commits that differ only by the timestamp
+          if git diff --cached --quiet -- . ':!.docs-source.txt'; then
+            echo "no content change"; exit 0
+          fi
+          git commit -qm "docs: sync top-level markdown from ${GITHUB_SHA::7}"
+          git push origin docs
