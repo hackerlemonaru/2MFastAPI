@@ -63,3 +63,15 @@ class Notes(View):
     def post(self, request):
         text = request.POST.get("text")
         if not text:
+            return JsonResponse({"error": "text required"}, status=400)
+        return JsonResponse({"created": text}, status=201)
+
+
+class NoteDetail(View):
+    def get(self, request, pk):
+        if pk not in NOTES:
+            raise Http404
+        return JsonResponse({"id": pk, "text": NOTES[pk]})
+
+    def delete(self, request, pk):
+        return JsonResponse({"deleted": pk})
