@@ -36,3 +36,30 @@ def detail(request, pk):
 
 def both(request):
     if request.method == "POST":
+        return JsonResponse({"m": "post"})
+    return JsonResponse({"m": "get"})
+
+
+def go(request):
+    return HttpResponseRedirect("/")
+
+
+def agent(request):
+    return JsonResponse({"agent": request.META.get("HTTP_X_AGENT", "none")})
+
+
+def archive(request, year):
+    return JsonResponse({"archive": year})
+
+
+NOTES = {1: "first", 2: "second"}
+
+
+class Notes(View):
+    def get(self, request):
+        limit = int(request.GET.get("limit", "10"))
+        return JsonResponse({"notes": list(NOTES.values())[:limit]})
+
+    def post(self, request):
+        text = request.POST.get("text")
+        if not text:
