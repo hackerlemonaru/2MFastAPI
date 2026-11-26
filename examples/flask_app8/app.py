@@ -23,3 +23,35 @@ class RegisterSchema(Schema):
 
 
 class UserSchema(Schema):
+    id = fields.Int()
+    name = fields.Str()
+
+
+with app.app_context():
+    db.create_all()
+
+
+@app.route("/register", methods=["POST"])
+def register():
+    try:
+        data = RegisterSchema().load(request.get_json())
+    except ValidationError as err:
+        return jsonify(err.messages), 400
+    if User.query.filter_by(name=data["name"]).first():
+        return jsonify({"error": "exists"}), 409
+    u = User(name=data["name"], password=data["password"])
+    db.session.add(u)
+    db.session.commit()
+    return jsonify({"user": UserSchema().dump(u), "age": data["age"]}), 201
+
+
+@app.route("/login", methods=["POST"])
+def login():
+    body = request.get_json()
+    u = User.query.filter_by(name=body.get("name")).first()
+    if u is None or u.password != body.get("password"):
+        return jsonify({"msg": "bad credentials"}), 401
+    return jsonify(access_token=create_access_token(identity=str(u.id)), refresh_token=create_refresh_token(identity=str(u.id)))
+
+
+@app.route("/me")
