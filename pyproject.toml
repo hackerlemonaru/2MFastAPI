@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tomfastapi"
+version = "0.1.0"
+description = "2MFastAPI (to MFastAPI): convert Flask / Django / FastAPI projects, in many library combinations, to MFastAPI"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = ["tofastapi>=0.5.2"]
+
+[project.optional-dependencies]
+test = ["pytest", "fastapi", "httpx", "flask", "django", "djangorestframework", "sqlalchemy", "pydantic", "flask-sqlalchemy", "flask-login", "flask-cors", "flask-restful", "marshmallow", "flask-jwt-extended", "itsdangerous", "python-multipart", "jinja2", "uvicorn"]
+
+[project.scripts]
+"2mfastapi" = "tomfastapi.cli:main"
+tomfastapi = "tomfastapi.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
