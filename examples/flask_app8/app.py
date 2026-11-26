@@ -55,3 +55,19 @@ def login():
 
 
 @app.route("/me")
+@jwt_required()
+def me():
+    u = db.session.get(User, int(get_jwt_identity()))
+    return jsonify(UserSchema().dump(u))
+
+
+@app.route("/maybe")
+@jwt_required(optional=True)
+def maybe():
+    return jsonify({"who": get_jwt_identity()})
+
+
+@app.route("/refresh", methods=["POST"])
+@jwt_required(refresh=True)
+def refresh():
+    return jsonify(access_token=create_access_token(identity=get_jwt_identity()), type=get_jwt()["type"])
