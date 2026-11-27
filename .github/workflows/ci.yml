@@ -29,3 +29,28 @@ jobs:
   upstream-issue:
     if: failure() && github.event_name == 'schedule'
     needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          t="upstream: 最新版での定期試験が失敗 ($(date -u +%F))"
+          gh issue list -R "$GITHUB_REPOSITORY" --state open --search "$t in:title" --json number -q '.[0].number' | grep -q . || gh issue create -R "$GITHUB_REPOSITORY" --title "$t" --body "最新の 2FastAPI / MFastAPI / 上流(Python・Flask・Django・FastAPI・Starlette)で定期試験が失敗しました。実行: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+  nightly-release:
+    # 毎晩、2FastAPI か MFastAPI に新しい版が出ていて試験が通れば、パッチ版を上げてリリースする(versions.json に記録)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          python scripts/nightly_bump.py
+          if git diff --quiet; then echo "no new upstream"; exit 0; fi
+          v=$(python -c "import re;print(re.search(r'version = \"([^\"]+)\"',open('pyproject.toml').read()).group(1))")
+          git config user.name "2mfastapi-nightly"; git config user.email "actions@users.noreply.github.com"
+          git commit -am "release v$v: 上流の新版(2FastAPI/MFastAPI)に追従(自動)"
+          git push
+          python -m pip install build && python -m build
+          gh release create "v$v" dist/* --title "v$v" --notes "毎晩の自動追従。上流: $(cat upstream.json)"
